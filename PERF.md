@@ -6,6 +6,9 @@ M0 remains **incomplete**. These are local spike observations, not iPhone result
 | --- | --- | --- |
 | WebGL2 wasm | local optimized artifact | 13,523,653 bytes uncompressed; 2,781,795 bytes Brotli; 4,188,083 bytes gzip |
 | WebGPU wasm | local optimized artifact | 11,938,806 bytes uncompressed; 2,309,981 bytes Brotli; 3,542,038 bytes gzip |
+| WebGL2 wasm, current full build | local optimized artifact, 2026-11-07 | 13,525,845 bytes uncompressed; 2,784,100 bytes Brotli; 4,190,677 bytes gzip; initial HTML + JS + wasm 13,632,744 bytes uncompressed |
+| WebGPU wasm, current full build | local optimized artifact, 2026-11-07 | 11,940,580 bytes uncompressed; 2,308,722 bytes Brotli; 3,542,546 bytes gzip; initial HTML + JS + wasm 12,052,741 bytes uncompressed |
+| Cloud-browser checkpoint | user reported, 2026-11-07 | User reports that it loads; selected renderer, visible pixels and FPS were not independently verified at this checkpoint. |
 | WebGL2 scene | cloud browser, Chrome 154, 1024×768; reported ANGLE / Intel UHD 630 | 1,000 cubes rendered; sampled overlay around 2.3–2.4 Bevy updates/s (~410–433 ms per update); not a controlled benchmark, no phone inference |
 | WebGPU scene | same cloud browser | adapter probe passed but the Bevy rendering device was lost (Chrome reported its external instance was unavailable); canvas-format performance warning; root cause unknown; **not working/verified** |
 | Automatic fallback | cloud Chrome, local static server | after WebGPU device loss, a fresh page loaded the WebGL2 artifact and its update loop ran; forced WebGPU showed the device-loss error; actual phone fallback not tested |

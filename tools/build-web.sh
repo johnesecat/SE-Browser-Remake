@@ -3,7 +3,7 @@ set -euo pipefail
 
 # The repository's project-pages URL, or / for local hosting.
 public_url="${1:-/SE-Browser-Remake/}"
-case "$public_url" in /*/) ;; *) echo 'public URL must start and end with /' >&2; exit 1;; esac
+case "$public_url" in /|/*/) ;; *) echo 'public URL must start and end with /' >&2; exit 1;; esac
 
 if [ "$(trunk --version)" != 'trunk 0.22.1' ]; then
   echo 'Install Trunk 0.22.1 before building.' >&2
@@ -22,6 +22,7 @@ const fs = require('node:fs');
 const crypto = require('node:crypto');
 const zlib = require('node:zlib');
 const manifest = {};
+const failures = [];
 for (const renderer of ['webgl2', 'webgpu']) {
   const dir = `dist/${renderer}`;
   const files = fs.readdirSync(dir);
@@ -35,10 +36,14 @@ for (const renderer of ['webgl2', 'webgpu']) {
   fs.writeFileSync(`${dir}/${wasm[0]}.br`, br);
   fs.writeFileSync(`${dir}/${wasm[0]}.gz`, gz);
   console.log(`${renderer}: wasm ${data.length} bytes, brotli ${br.length} bytes, gzip ${gz.length} bytes, sha256 ${crypto.createHash('sha256').update(data).digest('hex')}`);
-  if (br.length > 12_000_000) throw new Error(`${renderer} exceeds 12 MB Brotli`);
+  if (br.length > 12_000_000) failures.push(`${renderer} exceeds 12 MB Brotli`);
   const firstLoad = data.length + fs.statSync(`${dir}/${js[0]}`).size + fs.statSync('dist/index.html').size + fs.statSync('dist/loader.js').size;
   console.log(`${renderer}: conservative uncompressed initial HTML + JS + wasm: ${firstLoad} bytes (does not include response headers/manifest)`);
-  if (firstLoad >= 8_000_000) throw new Error(`${renderer} exceeds M0's 8 MB conservative initial-load gate`);
+  if (firstLoad >= 8_000_000) failures.push(`${renderer} exceeds M0's 8 MB conservative initial-load gate`);
 }
 fs.writeFileSync('dist/build-manifest.json', JSON.stringify(manifest, null, 2) + '\n');
+if (failures.length) {
+  for (const failure of failures) console.error(failure);
+  process.exitCode = 1;
+}
 NODE
