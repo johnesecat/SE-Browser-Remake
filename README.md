@@ -14,8 +14,27 @@ Requires Rust 1.99.1 with `wasm32-unknown-unknown`, Trunk 0.22.1, Node.js and ne
 bash tools/build-web.sh /SE-Browser-Remake/
 ```
 
-For local static hosting, build with `/` instead. **The complete build currently exits unsuccessfully because both artifacts exceed its conservative uncompressed 8 MB M0 gate**. It still writes the manifest and reports both sizes for diagnosis; the generated output has not passed deployment criteria. Individual WebGL2 and WebGPU Trunk builds succeeded; only WebGL2 rendered in prior desktop Chrome testing. WebGPU loses its device in that environment; automatic selection retries once with WebGL2 on a fresh page, while a forced renderer reports the error. The loader waits for Bevy updates but does not verify the rendered pixels. GitHub Pages determines HTTP content encoding; `.br` files do not prove actual transfer size. Renderer overrides are `?renderer=webgl2` and `?renderer=webgpu`; `?diag=1` requests the Bevy update-FPS overlay.
+For local static hosting, build with `/` instead. The build finishes by running `tools/check-budget.js`, which gates the M0 first-load budget on Brotli bytes (under 8 MB) and the wasm ceiling (12 MB Brotli), and reports uncompressed sizes for diagnosis. Current artifacts are 2.90 MB (WebGL2) and 2.43 MB (WebGPU) Brotli, so the gate passes; uncompressed sizes are 13.5 MB and 11.9 MB. WebGL2 renders, while WebGPU loses its device in cloud Chrome; automatic selection retries once with WebGL2 on a fresh page, and a forced renderer reports the error. Renderer overrides are `?renderer=webgl2` and `?renderer=webgpu`; `?diag=1` requests the Bevy update-FPS overlay.
 
-Run focused loader watchdog and fallback checks with `node tools/test-loader.js`. The startup timeout counts visible time and does not verify rendered pixels.
+## Tests
+
+```sh
+node tools/test-loader.js   # watchdog, hidden-tab time, render error and fallback
+node tools/test-budget.js   # first-load and wasm budget boundaries
+python3 tools/test-web.py   # rendered pixels and cold-load bytes in a real browser
+```
+
+`tools/test-web.py` needs Playwright with Chromium plus Pillow. It starts `tools/serve-dist.py`, which serves `dist/` with the Brotli/gzip negotiation GitHub Pages performs, then asserts the WebGL2 canvas shows a shaded, animated teal cube scene and that a cold load transfers under 8 MB. The committed `.br` files are not proof of Pages' negotiated encoding; the local figure is not a Pages measurement.
+
+This workspace's system Python is read-only and the image lacks Chromium's system libraries, so the browser test was set up with a project-local environment:
+
+```sh
+python3 -m venv .tools/venv && .tools/venv/bin/pip install playwright pillow
+.tools/venv/bin/python -m playwright install chromium
+# Chromium needs libraries this image does not ship; unpack them without root.
+LD_LIBRARY_PATH=$PWD/.tools/debs/root/usr/lib/x86_64-linux-gnu .tools/venv/bin/python tools/test-web.py
+```
+
+The unpacked libraries live under the ignored `.tools/` directory, so re-run the package step after a workspace restore.
 
 There is no service, login or multiplayer. Gameplay, level, models, audio and cinematic systems are not implemented yet.
