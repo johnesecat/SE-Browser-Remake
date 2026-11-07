@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>COLLATERAL — platform spike</title>
+  <link rel="icon" href="data:,">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; background: #0b1417; color: #d9eae4; font: 15px system-ui, sans-serif; }
+    #stage { position: fixed; inset: 0; width: 100%; height: 100dvh; overflow: hidden; }
+    canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+    #loading { position: fixed; inset: 0; display: grid; place-content: center; padding: 2rem; background: #0b1417; }
+    #loading[hidden], #diag[hidden] { display: none; }
+    .brand { font-size: 12px; letter-spacing: .28em; color: #8fe1c5; }
+    h1 { font-size: clamp(2rem, 9vw, 4rem); letter-spacing: .1em; margin: .6rem 0 1rem; }
+    p { max-width: 28rem; color: #aabeb8; line-height: 1.6; }
+    progress { width: min(70vw, 24rem); height: .5rem; accent-color: #8fe1c5; }
+    button { min-height: 44px; padding: .7rem 1.2rem; border: 1px solid #8fe1c5; color: #d9eae4; background: transparent; }
+    #diag { position: fixed; top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); padding: 10px; color: #dcfff3; background: #001a1ad9; white-space: pre; font: 12px/1.5 monospace; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <main id="stage"><canvas id="game" aria-label="Bevy platform spike"></canvas></main>
+  <section id="loading" role="status" aria-live="polite">
+    <span class="brand">PROJECT / COLLATERAL</span>
+    <h1>PLATFORM SPIKE</h1>
+    <p id="status">Checking graphics support…</p>
+    <progress id="progress" max="1"></progress>
+    <button id="retry" type="button" hidden>Reload</button>
+  </section>
+  <pre id="diag" hidden></pre>
+  <script type="module" src="loader.js"></script>
+</body>
+</html>
