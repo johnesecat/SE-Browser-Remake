@@ -22,7 +22,8 @@ Update this file after each meaningful increment. `[x]` means implemented or obs
 
 ### Remaining work and acceptance
 - [x] Build output reports both artifacts, hashes and both conservative size-gate results and writes the manifest even on budget failure; the original 8 MB gate remains enforced. Local `/` base path is accepted.
-- [ ] **Next:** resolve wasm-bindgen's missing `target_features` warning and rebuild/retest both renderer artifacts; then complete accurate rendered-frame readiness and Pages CI.
+- [x] Preserve wasm `target_features` through wasm-bindgen by stripping debug information instead of all sections; both optimized artifacts rebuilt with no missing-metadata warning and pass Node's wasm validation. Cloud Chrome reached the WebGL2 update loop; forced WebGPU still reported device loss. See `PERF.md` for limitations.
+- [ ] **Next:** complete accurate rendered-frame readiness and Pages CI without weakening size or platform gates.
 - [ ] Prove renderer startup and visible frames rather than treating a running update loop as rendered output; cover selection, overrides, errors, timeout, fallback and background behavior with focused tests.
 - [ ] Investigate WebGPU device loss on an independent real browser/device and address confirmed application causes. Do not infer a cause from Chromium's generic external-instance message.
 - [ ] Create GitHub Actions checks and Pages packaging/deployment workflow for both builds, tests, lint, size gates and correct repository subpath; do not push/deploy without authorization.

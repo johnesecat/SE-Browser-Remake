@@ -7,4 +7,5 @@ opt-level = "z"
 lto = "fat"
 codegen-units = 1
 panic = "abort"
-strip = true
+# Keep the wasm target_features section until wasm-bindgen has processed it.
+strip = "debuginfo"
