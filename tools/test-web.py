@@ -163,6 +163,18 @@ def main():
 
             errors = [line for line in console if line.startswith(("error", "pageerror"))]
             check(not errors, f"no console errors ({errors[:3]})")
+
+            print("overrides")
+            # An unknown override must fail visibly instead of loading a renderer.
+            page.goto(f"{base}?renderer=bogus", wait_until="domcontentloaded")
+            page.wait_for_function(
+                "() => document.querySelector('#status').textContent.includes('Unknown renderer')",
+                timeout=15_000,
+            )
+            check(not page.locator("#loading").is_hidden(), "the loading panel stays up on failure")
+            check(page.locator("#retry").is_visible(), "a reload action is offered on failure")
+            check(page.evaluate("() => document.documentElement.dataset.renderer === undefined"),
+                  "no renderer artifact is selected for an unknown override")
             browser.close()
     finally:
         if server:
