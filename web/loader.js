@@ -67,6 +67,38 @@ async function loadWasm(url) {
   return data;
 }
 
+async function waitForBevy(initialization, timeoutMs = 30000) {
+  let initialized = false;
+  let initializationFailed = false;
+  let initializationError;
+  Promise.resolve(initialization).then(
+    () => { initialized = true; },
+    error => { initializationFailed = true; initializationError = error; },
+  );
+  let visibleWait = 0;
+  let lastCheck = performance.now();
+  let wasVisible = document.visibilityState === 'visible';
+  function updateVisibility() {
+    const now = performance.now();
+    if (wasVisible) visibleWait += now - lastCheck;
+    lastCheck = now;
+    wasVisible = document.visibilityState === 'visible';
+  }
+  document.addEventListener('visibilitychange', updateVisibility);
+  try {
+    while (!initialized || document.documentElement.dataset.bevyRunning !== 'true') {
+      if (failed) return false;
+      if (initializationFailed) throw initializationError;
+      updateVisibility();
+      if (visibleWait > timeoutMs) throw new Error('Bevy did not begin updating within 30 visible seconds');
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    return !failed;
+  } finally {
+    document.removeEventListener('visibilitychange', updateVisibility);
+  }
+}
+
 async function start() {
   const override = params.get('renderer');
   if (override !== null && !['webgpu', 'webgl2'].includes(override)) throw new Error('Unknown renderer override');
@@ -87,22 +119,9 @@ async function start() {
   const module = await import(new URL(artifacts.js, document.baseURI));
   const wasm = await loadWasm(new URL(artifacts.wasm, document.baseURI));
   status.textContent = 'Starting Bevy…';
-  await module.default({ module_or_path: wasm });
-  // Bevy reports a progressing app loop, not proof of a successful visible frame.
-  let visibleWait = 0;
-  let lastCheck = performance.now();
-  let wasVisible = document.visibilityState === 'visible';
-  while (document.documentElement.dataset.bevyRunning !== 'true') {
-    if (failed) return;
-    await new Promise(resolve => setTimeout(resolve, 100));
-    const now = performance.now();
-    const visible = document.visibilityState === 'visible';
-    if (visible && wasVisible) visibleWait += now - lastCheck;
-    wasVisible = visible;
-    lastCheck = now;
-    if (visibleWait > 30000) throw new Error('Bevy did not begin updating within 30 visible seconds');
-  }
-  if (!failed) loading.hidden = true;
+  // The watchdog covers wasm initialization as well as the Bevy update loop.
+  // A progressing app loop is not proof of a successful visible frame.
+  if (await waitForBevy(module.default({ module_or_path: wasm }))) loading.hidden = true;
 }
 
 const root = document.documentElement;

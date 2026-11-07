@@ -16,4 +16,6 @@ bash tools/build-web.sh /SE-Browser-Remake/
 
 For local static hosting, build with `/` instead. **The complete build currently exits unsuccessfully because both artifacts exceed its conservative uncompressed 8 MB M0 gate**. It still writes the manifest and reports both sizes for diagnosis; the generated output has not passed deployment criteria. Individual WebGL2 and WebGPU Trunk builds succeeded; only WebGL2 rendered in prior desktop Chrome testing. WebGPU loses its device in that environment; automatic selection retries once with WebGL2 on a fresh page, while a forced renderer reports the error. The loader waits for Bevy updates but does not verify the rendered pixels. GitHub Pages determines HTTP content encoding; `.br` files do not prove actual transfer size. Renderer overrides are `?renderer=webgl2` and `?renderer=webgpu`; `?diag=1` requests the Bevy update-FPS overlay.
 
+Run focused loader watchdog and fallback checks with `node tools/test-loader.js`. The startup timeout counts visible time and does not verify rendered pixels.
+
 There is no service, login or multiplayer. Gameplay, level, models, audio and cinematic systems are not implemented yet.
