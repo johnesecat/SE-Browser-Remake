@@ -1,8 +1,11 @@
-#[cfg(target_arch = "wasm32")]
-use bevy::time::Real;
 use bevy::{
     prelude::*,
     render::view::{Msaa, Tonemapping},
+};
+#[cfg(target_arch = "wasm32")]
+use bevy::{
+    render::error_handler::{RenderErrorHandler, RenderErrorPolicy},
+    time::Real,
 };
 
 #[derive(Component)]
@@ -20,6 +23,7 @@ fn main() {
             }),
             ..default()
         }))
+        .add_plugins(PlatformStatusPlugin)
         .add_systems(Startup, setup)
         .add_systems(Update, spin)
         .add_systems(Update, update_diagnostics)
@@ -68,18 +72,46 @@ fn setup(
         Msaa::Off,
         Transform::from_xyz(18.0, 15.0, 22.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
+}
 
-    #[cfg(target_arch = "wasm32")]
-    signal_ready();
+struct PlatformStatusPlugin;
+
+impl Plugin for PlatformStatusPlugin {
+    fn build(&self, app: &mut App) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            app.insert_resource(RenderErrorHandler(|error, _, _| {
+                set_status(
+                    "data-render-error",
+                    &format!("{:?}: {}", error.ty, error.description),
+                );
+                RenderErrorPolicy::StopRendering
+            }))
+            .add_systems(Update, signal_running);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let _ = app;
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
-fn signal_ready() {
+fn set_status(name: &str, value: &str) {
     if let Some(document) = web_sys::window().and_then(|window| window.document())
         && let Some(root) = document.document_element()
-        && let Err(error) = root.set_attribute("data-bevy-ready", "true")
+        && let Err(error) = root.set_attribute(name, value)
     {
-        bevy::log::error!("Could not signal scene readiness: {error:?}");
+        bevy::log::error!("Could not report renderer status: {error:?}");
+    }
+}
+
+// This only confirms the app loop is progressing, not that pixels reached the display.
+#[cfg(target_arch = "wasm32")]
+fn signal_running(mut updates: Local<u8>) {
+    if *updates < 3 {
+        *updates += 1;
+        if *updates == 3 {
+            set_status("data-bevy-running", "true");
+        }
     }
 }
 

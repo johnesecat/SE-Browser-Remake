@@ -1,6 +1,6 @@
 # COLLATERAL — living engineering plan
 
-Status: M0 incomplete. WebGL2 renders in desktop Chrome; WebGPU is blank there after startup; both uncompressed builds exceed the conservative 8 MB gate. Pages and iPhone remain untested. See PERF.md. Nothing is accepted until the stated tests are actually run. This is a static, single-player Rust/Bevy game, not a medical simulator. All ballistics and injury are stylised.
+Status: M0 incomplete. WebGL2 rendered in desktop Chrome; WebGPU lost its device there, with automatic fallback to the WebGL2 update loop observed. Both uncompressed builds exceed the conservative 8 MB gate. Pages and iPhone remain untested. See PERF.md. Nothing is accepted until the stated tests are actually run. This is a static, single-player Rust/Bevy game, not a medical simulator. All ballistics and injury are stylised.
 
 ## Product decisions and constraints
 

@@ -6,6 +6,23 @@ const diag = document.querySelector('#diag');
 const params = new URLSearchParams(location.search);
 retry.addEventListener('click', () => location.reload());
 
+let renderer;
+let failed = false;
+
+function handleFailure(error) {
+  if (failed) return;
+  failed = true;
+  if (renderer === 'webgpu' && !params.has('renderer') && params.get('_fallback') !== 'webgl2') {
+    console.error('WebGPU failed; retrying with WebGL2:', error);
+    status.textContent = 'WebGPU failed; retrying with WebGL2…';
+    const url = new URL(location.href);
+    url.searchParams.set('_fallback', 'webgl2');
+    location.replace(url.href);
+    return;
+  }
+  fail(error);
+}
+
 function fail(error) {
   console.error('Platform spike failed:', error);
   loading.hidden = false;
@@ -52,13 +69,13 @@ async function loadWasm(url) {
 
 async function start() {
   const override = params.get('renderer');
-  if (override && !['webgpu', 'webgl2'].includes(override)) throw new Error('Unknown renderer override');
+  if (override !== null && !['webgpu', 'webgl2'].includes(override)) throw new Error('Unknown renderer override');
   let gpu = false;
-  if (override !== 'webgl2') {
+  if (override !== 'webgl2' && (override === 'webgpu' || params.get('_fallback') !== 'webgl2')) {
     try { gpu = await probeWebGPU(); } catch (error) { console.warn('WebGPU probe failed:', error); }
   }
   if (override === 'webgpu' && !gpu) throw new Error('WebGPU was requested but the adapter smoke test failed');
-  const renderer = gpu ? 'webgpu' : 'webgl2';
+  renderer = gpu ? 'webgpu' : 'webgl2';
   console.info(`Selected renderer artifact: ${renderer}`);
   document.documentElement.dataset.renderer = renderer.toUpperCase();
   document.documentElement.dataset.diagnostics = String(params.get('diag') === '1');
@@ -71,14 +88,31 @@ async function start() {
   const wasm = await loadWasm(new URL(artifacts.wasm, document.baseURI));
   status.textContent = 'Starting Bevy…';
   await module.default({ module_or_path: wasm });
-  const deadline = performance.now() + 30000;
-  while (document.documentElement.dataset.bevyReady !== 'true') {
-    if (performance.now() > deadline) throw new Error('Bevy did not initialize within 30 seconds');
+  // Bevy reports a progressing app loop, not proof of a successful visible frame.
+  let visibleWait = 0;
+  let lastCheck = performance.now();
+  let wasVisible = document.visibilityState === 'visible';
+  while (document.documentElement.dataset.bevyRunning !== 'true') {
+    if (failed) return;
     await new Promise(resolve => setTimeout(resolve, 100));
+    const now = performance.now();
+    const visible = document.visibilityState === 'visible';
+    if (visible && wasVisible) visibleWait += now - lastCheck;
+    wasVisible = visible;
+    lastCheck = now;
+    if (visibleWait > 30000) throw new Error('Bevy did not begin updating within 30 visible seconds');
   }
-  loading.hidden = true;
+  if (!failed) loading.hidden = true;
 }
-start().catch(fail);
+
+const root = document.documentElement;
+new MutationObserver(() => {
+  if (root.dataset.renderError) handleFailure(new Error(`Renderer failed: ${root.dataset.renderError}`));
+}).observe(root, { attributes: true, attributeFilter: ['data-render-error'] });
+document.querySelector('#game').addEventListener('webglcontextlost', () => {
+  handleFailure(new Error('WebGL context lost; reload to retry'));
+});
+start().catch(handleFailure);
 
 let resizeTimer;
 function resizeViewport() {
