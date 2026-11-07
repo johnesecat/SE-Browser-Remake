@@ -33,7 +33,7 @@ run() {
 
 run node tools/test-loader.js
 run node tools/test-budget.js
-run node --test tools/test-package.js
+run node --test tools/test-package.js tools/test-ci-workflow.js
 
 if [ "$skip_browser" -eq 1 ]; then
   echo "== browser check skipped"

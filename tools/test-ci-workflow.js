@@ -40,6 +40,15 @@ test("deployment is limited to main and has the permissions it needs", () => {
   assert.match(text, /workflow_dispatch/, "the pipeline must be runnable by hand");
 });
 
+test("the shared test entry point runs the repository-level tests", () => {
+  // CI runs tools/ci-test.sh, so a test missing from it never runs in CI.
+  const entry = fs.readFileSync(path.join(repo, "tools", "ci-test.sh"), "utf8");
+  for (const file of ["tools/test-package.js", "tools/test-ci-workflow.js"]) {
+    assert.match(entry, new RegExp(file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+                 `${file} must run from tools/ci-test.sh`);
+  }
+});
+
 test("the browser test has Chromium available", () => {
   const text = workflow();
   assert.match(text, /playwright install/, "the browser test needs Chromium installed");
