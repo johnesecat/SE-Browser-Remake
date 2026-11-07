@@ -24,6 +24,8 @@ node tools/test-budget.js   # first-load and wasm budget boundaries
 python3 tools/test-web.py   # rendered pixels and cold-load bytes in a real browser
 ```
 
+`bash tools/ci-test.sh` runs all four in the order CI uses and stops at the first failure; add `--skip-browser` where Chromium is unavailable. The GitHub Actions workflow (`.github/workflows/ci.yml`) builds both artifacts, runs that script, packages `_site` and deploys it to Pages on `main` only. Nothing has been deployed from this workspace, and the workflow has never run on GitHub: Pages also has to be switched to the GitHub Actions source in repository settings before a deploy can succeed.
+
 `tools/test-web.py` needs Playwright with Chromium plus Pillow. It starts `tools/serve-dist.py`, which serves `dist/` with the Brotli/gzip negotiation GitHub Pages performs, then asserts the WebGL2 canvas shows a shaded, animated teal cube scene and that a cold load transfers under 8 MB. The committed `.br` files are not proof of Pages' negotiated encoding; the local figure is not a Pages measurement.
 
 This workspace's system Python is read-only and the image lacks Chromium's system libraries, so the browser test was set up with a project-local environment:
