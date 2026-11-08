@@ -1,5 +1,7 @@
 # COLLATERAL — living engineering plan
 
+Game progress: `crates/sim` holds the deterministic ballistics core (1 kHz fixed-step flight, drag, wind, Coriolis, bisection zeroing, 22 tests) and the demo scene is now a range that draws the resolved trajectory. M1 remains blocked on an accepted character asset; M0's device and Pages acceptance remains open. Model constants are styling values, not measured data.
+
 Status: M0 incomplete. WebGL2 renders: a headless-Chromium Playwright check asserts shaded, animated cube pixels and a Brotli cold load under 8 MB. WebGPU still loses its device in cloud Chrome, with automatic fallback to the WebGL2 update loop observed. Pages CI/deployment and iPhone remain untested. See PERF.md. Nothing is accepted until the stated tests are actually run. This is a static, single-player Rust/Bevy game, not a medical simulator. All ballistics and injury are stylised.
 
 ## Product decisions and constraints

@@ -47,6 +47,18 @@ Update this file after each meaningful increment. `[x]` means implemented or obs
 - [ ] Lit turntable and anatomy toggle; verify missing-organ, size, quality and performance acceptance on the appropriate device.
 
 ## M2 — deterministic ballistics and anatomy
+
+### Started ahead of M1 (unblocked work only)
+
+M1 waits on an accepted character asset, so the first game slice is the part of M2 that needs no anatomy: pure ballistics. Nothing here is X-ray, tissue or wound work.
+
+- [x] `crates/sim` (dependency-free, no Bevy) resolves a shot at a fixed 1 kHz with fourth-order Runge-Kutta over quadratic drag, uniform wind, gravity and the Coriolis term for the firing latitude, then samples it every millisecond and interpolates the ground crossing. A bisection solver finds the come-up that crosses the line of sight at a chosen zero range from a real bore height.
+- [x] 22 tests pin the model: an exact parabola at the pole, drag costing range rather than flight time, crosswind drift growing with distance and pointing downwind, Coriolis deflecting right in the north and left in the south with no lateral drift at the equator, the Eötvös difference between east and west shots, bit-identical positions over 1,000 replays, zero crossings at 100/300/600/1000 m inside 1 mm, and degenerate launches resolving to nothing. Removing the Coriolis term fails two of them.
+- [x] The 1,000-cube spike is replaced by a range: ground, scattered cover, a target at the 300 m zero, the resolved trajectory drawn from the simulation's own samples, and a tracer that follows it. The browser test now asserts scenery coverage, amber trajectory pixels, tracer motion and the same budget, phone-metric and rotation checks.
+- [ ] Weapon data is still Rust constants (`WeaponSpec::long_range_rifle`), not RON. Load it from data when a tuning path exists, and keep the drag coefficient labelled as a stylised single number rather than measured ballistic data.
+- [ ] Everything anatomical in M2 remains untouched: tissue/organ/bone properties, energy-conserving penetration and deflection, wound channel, first-hit prediction, damage HUD, and the 1,000-replay damage accounting.
+- [ ] Nothing fires in the range yet: the shot is resolved once at startup. Aiming, re-zeroing and input belong with the M7 weapon work.
+
 - [ ] Pure-Rust crates and tests; data-driven weapons and tissue/organ/bone properties.
 - [ ] 1 kHz seeded trajectory with drag, gravity, wind, Coriolis and zeroing; first-hit prediction; energy-conserving penetration, deflection, wound channel, fracture/damage and collateral.
 - [ ] Damage HUD and tests: 1,000 deterministic replays, energy accounting and ordered chest hits, 100 scripted first-hit predictions.

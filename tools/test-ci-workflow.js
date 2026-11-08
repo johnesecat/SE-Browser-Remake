@@ -47,6 +47,8 @@ test("the shared test entry point runs the repository-level tests", () => {
     assert.match(entry, new RegExp(file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
                  `${file} must run from tools/ci-test.sh`);
   }
+  assert.match(entry, /cargo test -p collateral-sim/,
+               "the ballistics tests must run from tools/ci-test.sh");
 });
 
 test("the browser test has Chromium available", () => {

@@ -10,8 +10,10 @@ Proves four things a build-script size report cannot:
 Chromium here is headless with a software rasterizer, so this is evidence about
 correctness, not performance, and it is never evidence about a real iPhone.
 
-The scene draws 1,000 teal cubes on a dark background, so the checks assert a dark
-background, a large teal-shaded share and frame-to-frame change.
+The scene is the firing range: a long ground plane, scattered cover, a target and
+the resolved trajectory drawn as amber lines with a tracer moving along it. The
+checks assert scenery coverage, amber trajectory pixels, a dark ground share and
+frame-to-frame change from the tracer.
 """
 import argparse
 import io
@@ -46,10 +48,16 @@ def check(condition, message):
         failures.append(message)
 
 
-def is_teal(pixel):
+def is_scenery(pixel):
     r, g, b = pixel[0], pixel[1], pixel[2]
-    # Material base color is srgb(0.32, 0.76, 0.72): green and blue dominate red.
-    return g > r + 20 and b > r + 10 and g > 70
+    # Ground and scrub are green-dominant; the sky is blue-dominant.
+    return g > r + 6 and g >= b and g > 35
+
+
+def is_amber(pixel):
+    r, g, b = pixel[0], pixel[1], pixel[2]
+    # Trajectory and tracer: srgb(1.0, 0.72, 0.18), bright and warm.
+    return r > 150 and g > 80 and b < g - 30
 
 
 def is_dark(pixel):
@@ -69,7 +77,8 @@ def analyse(png_bytes):
     return {
         "size": (width, height),
         "distinct": len(set(pixels)),
-        "teal": sum(1 for p in pixels if is_teal(p)) / total,
+        "scenery": sum(1 for p in pixels if is_scenery(p)) / total,
+        "amber": sum(1 for p in pixels if is_amber(p)) / total,
         "dark": sum(1 for p in pixels if is_dark(p)) / total,
         "pixels": pixels,
     }
@@ -148,17 +157,22 @@ def main():
 
             print("pixels")
             first = analyse(canvas.screenshot())
-            # A flat fill has a handful of colours; depth-shaded cubes produce dozens.
+            # A flat fill has a handful of colours; lit geometry produces dozens.
             check(first["distinct"] > 16,
                   f"frame is shaded rather than a flat fill (distinct={first['distinct']})")
-            check(first["dark"] > 0.05, f"frame is not a blank clear (dark share={first['dark']:.3f})")
-            check(first["teal"] > 0.10,
-                  f"teal cube material covers the viewport (share={first['teal']:.3f})")
+            check(first["scenery"] > 0.10,
+                  f"ground and cover fill the view (share={first['scenery']:.3f})")
+            check(first["amber"] > 0.001,
+                  f"the resolved trajectory is drawn (amber share={first['amber']:.4f})")
 
-            page.wait_for_timeout(1500)
-            second = analyse(canvas.screenshot())
-            moved = changed_fraction(first, second)
-            check(moved > 0.01, f"the scene animates between captures (changed={moved:.3f})")
+            # Breathing sway moves the whole frame, and the tracer sweeps the range
+            # once per cycle, so a burst of frames must differ between neighbours.
+            frames = [first]
+            for _ in range(8):
+                page.wait_for_timeout(500)
+                frames.append(analyse(canvas.screenshot()))
+            moved = max(changed_fraction(a, b) for a, b in zip(frames, frames[1:]))
+            check(moved > 0.01, f"the view animates between captures (changed={moved:.4f})")
 
             print("budget")
             # Re-load cold now that every asset is warm on the server but not in the browser.
@@ -208,8 +222,8 @@ def main():
             portrait_pixels = analyse(phone_page.locator("#game").screenshot())
             check(portrait_pixels["distinct"] > 16,
                   f"the scene renders at 3x (distinct={portrait_pixels['distinct']})")
-            check(portrait_pixels["teal"] > 0.10,
-                  f"teal cubes cover the portrait viewport (share={portrait_pixels['teal']:.3f})")
+            check(portrait_pixels["scenery"] > 0.10,
+                  f"ground and cover fill the portrait viewport (share={portrait_pixels['scenery']:.3f})")
 
             # Rotation: the canvas must follow the new viewport without breaking.
             phone_page.set_viewport_size(LANDSCAPE)
@@ -222,8 +236,8 @@ def main():
             landscape_pixels = analyse(phone_page.locator("#game").screenshot())
             check(landscape_pixels["distinct"] > 16,
                   f"the scene still renders after rotation (distinct={landscape_pixels['distinct']})")
-            check(landscape_pixels["dark"] > 0.02,
-                  f"the rotated frame is not a blank clear (dark share={landscape_pixels['dark']:.3f})")
+            check(landscape_pixels["scenery"] > 0.05,
+                  f"the rotated frame shows the range (scenery share={landscape_pixels['scenery']:.3f})")
             phone_errors = [line for line in phone_console if line.startswith(("error", "pageerror"))]
             check(not phone_errors, f"no console errors on the phone profile ({phone_errors[:3]})")
             phone.close()

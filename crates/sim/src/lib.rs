@@ -24,4 +24,4 @@ pub use atmosphere::Atmosphere;
 pub use trajectory::{Launch, Sample, Trajectory, STEP_SECONDS};
 pub use vector::Vec3;
 pub use weapon::WeaponSpec;
-pub use zero::{ZeroSolution, solve_zero};
+pub use zero::{STANDING_HEIGHT, ZeroSolution, solve_zero};
