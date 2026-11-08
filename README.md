@@ -37,6 +37,6 @@ python3 -m venv .tools/venv && .tools/venv/bin/pip install playwright pillow
 LD_LIBRARY_PATH=$PWD/.tools/debs/root/usr/lib/x86_64-linux-gnu .tools/venv/bin/python tools/test-web.py
 ```
 
-The unpacked libraries live under the ignored `.tools/` directory, so re-run the package step after a workspace restore.
+The unpacked libraries live under the ignored `.tools/` directory, so re-run the package step after a workspace restore. This image also ships no fonts, so any screenshot containing text renders blank boxes; copying a TTF into `.tools/fonts` and launching with `FONTCONFIG_FILE=.tools/fonts.conf` fixes that for visual checks (the game canvas is unaffected).
 
 There is no service, login or multiplayer. Gameplay, level, models, audio and cinematic systems are not implemented yet.

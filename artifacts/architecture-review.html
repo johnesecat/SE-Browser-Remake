@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>COLLATERAL — architecture review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+  svg text { font-family: "JetBrains Mono", ui-monospace, monospace; }
+  .card { background: #12181b; border: 1px solid #233036; }
+  .chip { background: #0d1417; border: 1px solid #233036; }
+  .arrow { color: #4b6b74; }
+  .before { border-color: #4a2b2b; }
+  .after { border-color: #1f4a41; }
+  .node { border: 1px solid #2d3d44; background: #0f1518; }
+  .seam { border: 1px dashed #d98b4a; }
+  .dense { border-width: 2px; }
+  .thin { opacity: .55; }
+  .grade-strong { background:#143d33; color:#7ee2c4; border-color:#1f5a4b; }
+  .grade-worth { background:#3a3216; color:#e8cf83; border-color:#5a4c1f; }
+  .grade-spec { background:#2a2438; color:#c6b2ef; border-color:#413863; }
+</style>
+</head>
+<body class="bg-[#0a1013] text-slate-200 antialiased">
+<div class="max-w-6xl mx-auto px-6 py-12">
+
+  <header class="border-b border-slate-800 pb-8">
+    <p class="mono text-xs tracking-[0.2em] text-teal-400/80">M0 · ARCHITECTURE REVIEW</p>
+    <h1 class="text-4xl font-semibold mt-3 tracking-tight">COLLATERAL — deepening opportunities</h1>
+    <p class="mt-4 text-slate-400 max-w-3xl leading-relaxed">
+      Scanned the whole tree (1,214 lines of tooling and spike code) and weighted the files that keep changing:
+      <span class="mono text-slate-300">test-web.py</span> and <span class="mono text-slate-300">loader.js</span> (3 commits each),
+      <span class="mono text-slate-300">build-web.sh</span> (3), with <span class="mono text-slate-300">TASKS.md</span> touched 7 times.
+      The candidates below turn shallow modules into deep ones: the point is fewer, narrower interfaces that tests can
+      actually stand on. Vocabulary is deliberate — module, interface, depth, seam, adapter, leverage, locality.
+    </p>
+    <div class="mt-5 flex flex-wrap gap-2 mono text-xs">
+      <span class="chip px-3 py-1 rounded">3 candidates</span>
+      <span class="chip px-3 py-1 rounded">1 strong</span>
+      <span class="chip px-3 py-1 rounded">no ADR conflicts found</span>
+      <span class="chip px-3 py-1 rounded">review by the implementer, not a fresh reviewer</span>
+    </div>
+  </header>
+
+  <!-- CANDIDATE 1 -->
+  <section class="card rounded-xl mt-10 p-7">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <p class="mono text-xs text-slate-500">CANDIDATE 01</p>
+        <h2 class="text-2xl font-semibold mt-1">One budget module, three adapters</h2>
+      </div>
+      <span class="grade-strong mono text-xs px-3 py-1 rounded border">Strong</span>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-7 mt-6">
+      <div>
+        <h3 class="mono text-xs tracking-widest text-slate-500">FILES</h3>
+        <ul class="mt-2 space-y-1 mono text-sm text-slate-300">
+          <li>tools/check-budget.js <span class="text-slate-500">— owns the limits</span></li>
+          <li>tools/test-budget.js <span class="text-slate-500">— re-states 8_000_000</span></li>
+          <li>tools/test-web.py <span class="text-slate-500">— re-states 8_000_000</span></li>
+          <li>PERF.md · README.md <span class="text-slate-500">— prose copies</span></li>
+        </ul>
+
+        <h3 class="mono text-xs tracking-widest text-slate-500 mt-5">PROBLEM</h3>
+        <p class="mt-2 text-sm text-slate-400 leading-relaxed">
+          The M0 budget is a domain rule, but it lives as four literals. The browser test asserts
+          <span class="mono">transferred &lt; 8_000_000</span> on its own authority, so raising the limit would leave one
+          check silently guarding the old number — a false pass with no failing test to show for it. There is no single
+          place a reader can learn what the budget <em>is</em>.
+        </p>
+
+        <h3 class="mono text-xs tracking-widest text-slate-500 mt-5">SOLUTION</h3>
+        <p class="mt-2 text-sm text-slate-400 leading-relaxed">
+          A <span class="mono text-slate-300">tools/budgets.js</span> module with one interface:
+          <span class="mono text-slate-300">limits</span> and <span class="mono text-slate-300">evaluate(measured)</span>.
+          The Node gate, its tests (deriving the exact boundary from <span class="mono">limits</span>) and the Playwright
+          check (reading the same values) all become adapters over it. Three consumers make this a real seam, not a
+          hypothetical one.
+        </p>
+
+        <h3 class="mono text-xs tracking-widest text-slate-500 mt-5">BENEFITS</h3>
+        <p class="mt-2 text-sm text-slate-400 leading-relaxed">
+          <strong class="text-slate-200">Locality:</strong> the rule changes in one file and every gate follows.
+          <strong class="text-slate-200">Leverage:</strong> one testable interface instead of three arithmetic copies, so a
+          boundary test written once protects the build, the browser check and the docs.
+        </p>
+      </div>
+
+      <div class="space-y-4">
+        <div class="before border rounded-lg p-4">
+          <p class="mono text-xs text-red-300/80 tracking-widest">BEFORE — THREE SHALLOW COPIES</p>
+          <svg viewBox="0 0 360 190" class="w-full mt-3">
+            <rect class="node" x="120" y="8" width="120" height="30" rx="4"/>
+            <text x="180" y="27" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="monospace">8_000_000</text>
+            <path class="arrow" d="M150 38 L70 78" stroke="#4b6b74" fill="none"/>
+            <path class="arrow" d="M180 38 L180 78" stroke="#4b6b74" fill="none"/>
+            <path class="arrow" d="M210 38 L292 78" stroke="#4b6b74" fill="none"/>
+            <rect class="node" x="16" y="78" width="108" height="46" rx="4"/>
+            <text x="70" y="98" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="monospace">check-budget</text>
+            <text x="70" y="113" fill="#64748b" font-size="8" text-anchor="middle" font-family="monospace">gate</text>
+            <rect class="node" x="128" y="78" width="104" height="46" rx="4"/>
+            <text x="180" y="98" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="monospace">test-budget</text>
+            <text x="180" y="113" fill="#64748b" font-size="8" text-anchor="middle" font-family="monospace">boundary</text>
+            <rect class="node" x="240" y="78" width="104" height="46" rx="4"/>
+            <text x="292" y="98" fill="#94a3b8" font-size="9" text-anchor="middle" font-family="monospace">test-web.py</text>
+            <text x="292" y="113" fill="#64748b" font-size="8" text-anchor="middle" font-family="monospace">transfer</text>
+            <text x="180" y="160" fill="#f87171" font-size="9" text-anchor="middle" font-family="monospace">drift = silent false pass</text>
+            <text x="180" y="176" fill="#64748b" font-size="8" text-anchor="middle" font-family="monospace">each copy is its own small module, none testable alone</text>
+          </svg>
+        </div>
+
+        <div class="after border rounded-lg p-4">
+          <p class="mono text-xs text-teal-300/80 tracking-widest">AFTER — ONE DEEP MODULE, THREE ADAPTERS</p>
+          <svg viewBox="0 0 360 190" class="w-full mt-3">
+            <rect class="node dense" x="92" y="52" width="176" height="72" rx="6"/>
+            <text x="180" y="74" fill="#e2e8f0" font-size="10" text-anchor="middle" font-family="monospace">budgets.js</text>
+            <text x="180" y="90" fill="#7ee2c4" font-size="8" text-anchor="middle" font-family="monospace">limits · evaluate()</text>
+            <text x="180" y="104" fill="#64748b" font-size="8" text-anchor="middle" font-family="monospace">8 MB first load · 12 MB wasm</text>
+            <text x="180" y="117" fill="#64748b" font-size="8" text-anchor="middle" font-family="monospace">boundary arithmetic</text>
+            <path class="arrow" d="M92 88 L70 88" stroke="#4b6b74" fill="none"/>
+            <path class="arrow" d="M268 88 L290 88" stroke="#4b6b74" fill="none"/>
+            <path class="arrow" d="M180 124 L180 140" stroke="#4b6b74" fill="none"/>
+            <rect class="node" x="12" y="70" width="54" height="36" rx="4"/>
+            <text x="39" y="86" fill="#94a3b8" font-size="8" text-anchor="middle" font-family="monospace">gate</text>
+            <text x="39" y="98" fill="#64748b" font-size="7" text-anchor="middle" font-family="monospace">node</text>
+            <rect class="node" x="294" y="70" width="54" height="36" rx="4"/>
+            <text x="321" y="86" fill="#94a3b8" font-size="8" text-anchor="middle" font-family="monospace">tests</text>
+            <text x="321" y="98" fill="#64748b" font-size="7" text-anchor="middle" font-family="monospace">node</text>
+            <rect class="node" x="126" y="140" width="108" height="36" rx="4"/>
+            <text x="180" y="156" fill="#94a3b8" font-size="8" text-anchor="middle" font-family="monospace">browser check</text>
+            <text x="180" y="168" fill="#64748b" font-size="7" text-anchor="middle" font-family="monospace">reads the same limits</text>
+            <text x="180" y="30" fill="#7ee2c4" font-size="9" text-anchor="middle" font-family="monospace">one interface, one test surface</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CANDIDATE 2 -->
+  <section class="card rounded-xl mt-8 p-7">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <p class="mono text-xs text-slate-500">CANDIDATE 02</p>
+        <h2 class="text-2xl font-semibold mt-1">Split the browser check into scenarios</h2>
+      </div>
+      <span class="grade-worth mono text-xs px-3 py-1 rounded border">Worth exploring</span>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-7 mt-6">
+      <div>
+        <h3 class="mono text-xs tracking-widest text-slate-500">FILES</h3>
+        <p class="mt-2 mono text-sm text-slate-300">tools/test-web.py <span class="text-slate-500">— 257 lines, the largest file in the repo</span></p>
+
+        <h3 class="mono text-xs tracking-widest text-slate-500 mt-5">PROBLEM</h3>
+        <p class="mt-2 text-sm text-slate-400 leading-relaxed">
+          Startup, pixels, budget, device metrics and overrides all live in one <span class="mono">main()</span> that holds a
+          browser, a CDP session, two contexts and a local server. Understanding one check means reading the other five;
+          running one alone is impossible, and every new scenario lengthens the same function. That is shallow: the
+          interface (one script, one exit code) is nearly as complex as the behaviour behind it.
+        </p>
+
+        <h3 class="mono text-xs tracking-widest text-slate-500 mt-5">SOLUTION</h3>
+        <p class="mt-2 text-sm text-slate-400 leading-relaxed">
+          Each scenario becomes a function that takes a page and returns observations, with all assertions funnelled
+          through one reporting seam (<span class="mono text-slate-300">check()</span>).
+          <span class="mono text-slate-300">--only device</span> then runs a scenario on its own. The browser remains a
+          single adapter at the edge; the scenario bodies become readable in isolation.
+        </p>
+
+        <h3 class="mono text-xs tracking-widest text-slate-500 mt-5">BENEFITS</h3>
+        <p class="mt-2 text-sm text-slate-400 leading-relaxed">
+          <strong class="text-slate-200">Locality:</strong> a failing device check points at one function instead of line 180
+          of a monolith. <strong class="text-slate-200">Leverage:</strong> adding the fallback scenario later costs one
+          function, not a re-read of the whole script.
+        </p>
+      </div>
+
+      <div class="space-y-4">
+        <div class="before border rounded-lg p-4">
+          <p class="mono text-xs text-red-300/80 tracking-widest">BEFORE — ONE LINEAR MAIN()</p>
+          <div class="mt-3 space-y-1">
+            <div class="node rounded px-3 py-2 mono text-[10px] text-slate-400">server + browser + cdp</div>
+            <div class="node rounded px-3 py-2 mono text-[10px] text-slate-400">startup checks</div>
+            <div class="node rounded px-3 py-2 mono text-[10px] text-slate-400">pixel checks</div>
+            <div class="node rounded px-3 py-2 mono text-[10px] text-slate-400">budget checks</div>
+            <div class="node rounded px-3 py-2 mono text-[10px] text-slate-400">device + rotation checks</div>
+            <div class="node rounded px-3 py-2 mono text-[10px] text-slate-400">override checks + teardown</div>
+          </div>
+          <p class="mono text-[10px] text-red-300/70 mt-3">every scenario shares mutable browser state</p>
+        </div>
+
+        <div class="after border rounded-lg p-4">
+          <p class="mono text-xs text-teal-300/80 tracking-widest">AFTER — SCENARIOS OVER ONE REPORT SEAM</p>
+          <div class="grid grid-cols-2 gap-1 mt-3">
+            <div class="node rounded px-2 py-2 mono text-[10px] text-slate-300">scenario: startup</div>
+            <div class="node rounded px-2 py-2 mono text-[10px] text-slate-300">scenario: pixels</div>
+            <div class="node rounded px-2 py-2 mono text-[10px] text-slate-300">scenario: budget</div>
+            <div class="node rounded px-2 py-2 mono text-[10px] text-slate-300">scenario: device</div>
+            <div class="node rounded px-2 py-2 mono text-[10px] text-slate-300">scenario: override</div>
+            <div class="seam rounded px-2 py-2 mono text-[10px] text-amber-200/90 text-center">check() seam</div>
+          </div>
+          <div class="node rounded px-2 py-2 mono text-[10px] text-slate-400 mt-1">browser adapter · server adapter</div>
+          <p class="mono text-[10px] text-teal-300/70 mt-3">--only device runs one scenario</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CANDIDATE 3 -->
+  <section class="card rounded-xl mt-8 p-7">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <p class="mono text-xs text-slate-500">CANDIDATE 03</p>
+        <h2 class="text-2xl font-semibold mt-1">Give the loader a tested core behind its DOM adapter</h2>
+      </div>
+      <span class="grade-spec mono text-xs px-3 py-1 rounded border">Speculative</span>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-7 mt-6">
+      <div>
+        <h3 class="mono text-xs tracking-widest text-slate-500">FILES</h3>
+        <ul class="mt-2 space-y-1 mono text-sm text-slate-300">
+          <li>web/loader.js <span class="text-slate-500">— 144 lines, 3 commits</span></li>
+          <li>tools/test-loader.js <span class="text-slate-500">— 113 lines of fake DOM to reach it</span></li>
+        </ul>
+
+        <h3 class="mono text-xs tracking-widest text-slate-500 mt-5">PROBLEM</h3>
+        <p class="mt-2 text-sm text-slate-400 leading-relaxed">
+          The loader's only interface is the page it mutates: URL parameter, <span class="mono">dataset</span> attributes,
+          overlay elements. So its tests must build a fake document that satisfies every DOM call the implementation
+          happens to make. Change an attribute name and the fake breaks; the tests are measuring the DOM adapter, not the
+          selection and watchdog logic where the bugs actually are.
+        </p>
+
+        <h3 class="mono text-xs tracking-widest text-slate-500 mt-5">SOLUTION</h3>
+        <p class="mt-2 text-sm text-slate-400 leading-relaxed">
+          Extract the decisions into a <span class="mono text-slate-300">startSession({ probe, load, clock, visible })</span>
+          module that returns events (<span class="mono">selected</span>, <span class="mono">failed</span>,
+          <span class="mono">running</span>). <span class="mono">loader.js</span> becomes the DOM adapter that renders those
+          events; tests drive the core with plain fakes and the adapter is covered by the existing browser checks.
+        </p>
+
+        <h3 class="mono text-xs tracking-widest text-slate-500 mt-5">BENEFITS</h3>
+        <p class="mt-2 text-sm text-slate-400 leading-relaxed">
+          <strong class="text-slate-200">Locality:</strong> watchdogs, visible-time accounting and one-shot fallback become
+          unit-testable without a document. <strong class="text-slate-200">Leverage:</strong> the browser test already covers
+          the adapter end to end, so the fake DOM loses nothing when it goes.
+        </p>
+        <p class="mt-3 text-xs text-amber-200/70 leading-relaxed">
+          Speculative because M0's loader is feature-complete and stable; this pays off when M1 adds asset loading and
+          more failure modes. Do not do it before the game loop needs it.
+        </p>
+      </div>
+
+      <div class="space-y-4">
+        <div class="before border rounded-lg p-4">
+          <p class="mono text-xs text-red-300/80 tracking-widest">BEFORE — LOGIC REACHABLE ONLY THROUGH THE DOM</p>
+          <svg viewBox="0 0 360 200" class="w-full mt-3">
+            <rect class="node" x="4" y="64" width="96" height="72" rx="4"/>
+            <text x="52" y="86" fill="#94a3b8" font-size="8" text-anchor="middle" font-family="monospace">fake DOM</text>
+            <text x="52" y="100" fill="#64748b" font-size="7" text-anchor="middle" font-family="monospace">113 lines</text>
+            <text x="52" y="112" fill="#64748b" font-size="7" text-anchor="middle" font-family="monospace">dataset</text>
+            <text x="52" y="124" fill="#64748b" font-size="7" text-anchor="middle" font-family="monospace">overlay</text>
+            <path class="arrow" d="M100 100 L114 100" stroke="#4b6b74" fill="none"/>
+            <rect class="node dense" x="114" y="52" width="136" height="96" rx="4"/>
+            <text x="182" y="74" fill="#e2e8f0" font-size="9" text-anchor="middle" font-family="monospace">loader.js</text>
+            <text x="182" y="90" fill="#94a3b8" font-size="7" text-anchor="middle" font-family="monospace">probe</text>
+            <text x="182" y="102" fill="#94a3b8" font-size="7" text-anchor="middle" font-family="monospace">watchdog</text>
+            <text x="182" y="114" fill="#94a3b8" font-size="7" text-anchor="middle" font-family="monospace">fallback</text>
+            <text x="182" y="126" fill="#94a3b8" font-size="7" text-anchor="middle" font-family="monospace">DOM writes</text>
+            <path class="arrow" d="M250 100 L264 100" stroke="#4b6b74" fill="none"/>
+            <rect class="node" x="264" y="64" width="92" height="72" rx="4"/>
+            <text x="310" y="86" fill="#94a3b8" font-size="8" text-anchor="middle" font-family="monospace">wasm</text>
+            <text x="310" y="100" fill="#64748b" font-size="7" text-anchor="middle" font-family="monospace">Bevy</text>
+            <text x="310" y="112" fill="#64748b" font-size="7" text-anchor="middle" font-family="monospace">renderer</text>
+            <text x="180" y="176" fill="#f87171" font-size="9" text-anchor="middle" font-family="monospace">all four concerns in one surface</text>
+          </svg>
+        </div>
+
+        <div class="after border rounded-lg p-4">
+          <p class="mono text-xs text-teal-300/80 tracking-widest">AFTER — CORE PLUS ADAPTER</p>
+          <svg viewBox="0 0 360 200" class="w-full mt-3">
+            <rect class="node dense" x="96" y="56" width="132" height="72" rx="5"/>
+            <text x="162" y="76" fill="#e2e8f0" font-size="9" text-anchor="middle" font-family="monospace">startSession()</text>
+            <text x="162" y="92" fill="#7ee2c4" font-size="7" text-anchor="middle" font-family="monospace">probe · load · clock</text>
+            <text x="162" y="104" fill="#64748b" font-size="7" text-anchor="middle" font-family="monospace">visible-time watchdog</text>
+            <text x="162" y="116" fill="#64748b" font-size="7" text-anchor="middle" font-family="monospace">one-shot fallback</text>
+            <path class="arrow" d="M96 92 L60 92" stroke="#4b6b74" fill="none"/>
+            <rect class="node" x="8" y="70" width="52" height="44" rx="4"/>
+            <text x="34" y="88" fill="#94a3b8" font-size="8" text-anchor="middle" font-family="monospace">unit</text>
+            <text x="34" y="100" fill="#64748b" font-size="7" text-anchor="middle" font-family="monospace">plain fakes</text>
+            <path class="arrow" d="M228 92 L262 92" stroke="#4b6b74" fill="none"/>
+            <rect class="node" x="262" y="66" width="90" height="52" rx="4"/>
+            <text x="307" y="84" fill="#94a3b8" font-size="8" text-anchor="middle" font-family="monospace">dom adapter</text>
+            <text x="307" y="98" fill="#64748b" font-size="7" text-anchor="middle" font-family="monospace">dataset + overlay</text>
+            <text x="307" y="110" fill="#64748b" font-size="7" text-anchor="middle" font-family="monospace">browser test</text>
+            <rect class="seam rounded" x="96" y="150" width="132" height="26" rx="4"/>
+            <text x="162" y="167" fill="#f0c07a" font-size="8" text-anchor="middle" font-family="monospace">seam: events, not DOM</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TOP RECOMMENDATION -->
+  <section class="mt-10 rounded-xl border border-teal-900/60 bg-[#0e1a18] p-7">
+    <p class="mono text-xs tracking-[0.2em] text-teal-400/80">TOP RECOMMENDATION</p>
+    <h2 class="text-2xl font-semibold mt-2">Start with the budget module (Candidate 01)</h2>
+    <p class="mt-3 text-slate-400 leading-relaxed max-w-3xl">
+      It is the smallest change with the largest blast radius: four literals collapse into one interface, the existing
+      boundary tests keep working (and stop hard-coding), and the browser check inherits the rule instead of asserting its
+      own. It also removes a live false-pass risk, which Candidates 02 and 03 do not.
+    </p>
+    <p class="mt-3 text-slate-400 leading-relaxed max-w-3xl">
+      Candidate 02 is worth doing before the next browser scenario lands, because each new scenario makes the monolith
+      more expensive to read. Candidate 03 should wait for M1's asset loading to prove it needs a core.
+    </p>
+    <p class="mono text-xs text-slate-500 mt-5">
+      Scope note: this review was performed by the implementer. A fresh reviewer would be a stronger check on the same
+      findings.
+    </p>
+  </section>
+
+  <footer class="mt-10 border-t border-slate-800 pt-5 mono text-xs text-slate-600">
+    COLLATERAL · M0 architecture review · generated from the working tree at HEAD
+  </footer>
+</div>
+</body>
+</html>
