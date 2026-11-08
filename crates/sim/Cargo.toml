@@ -1,0 +1,9 @@
+[package]
+name = "collateral-sim"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Deliberately dependency-free: the simulation must be pure Rust, deterministic
+# and cheap to compile for wasm32. Nothing here touches Bevy.
+[dependencies]
