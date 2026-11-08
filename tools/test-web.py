@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """End-to-end M0 check in a real browser.
 
-Proves three things a build-script size report cannot:
+Proves four things a build-script size report cannot:
   1. the WebGL2 artifact initializes and reports no renderer error;
   2. the canvas contains a rendered, animated 3D scene (pixels, not an update loop);
-  3. a cold first load transfers less than the M0 8 MB budget over Brotli.
+  3. a cold first load transfers less than the M0 8 MB budget over Brotli;
+  4. the scene survives phone-shaped metrics and rotation.
+
+Chromium here is headless with a software rasterizer, so this is evidence about
+correctness, not performance, and it is never evidence about a real iPhone.
 
 The scene draws 1,000 teal cubes on a dark background, so the checks assert a dark
 background, a large teal-shaded share and frame-to-frame change.
@@ -23,7 +27,13 @@ from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
 VIEWPORT = {"width": 390, "height": 844}
+LANDSCAPE = {"width": 844, "height": 390}
 STARTUP_TIMEOUT_MS = 120_000
+# Enough of Safari's identity for the loader's feature probe to take its normal path.
+PHONE_USER_AGENT = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+)
 
 failures = []
 
@@ -48,6 +58,10 @@ def is_dark(pixel):
 
 def analyse(png_bytes):
     image = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+    # High-DPI captures are large; scale them back so sampling stays cheap.
+    scale = max(1, image.width // VIEWPORT["width"])
+    if scale > 1:
+        image = image.resize((image.width // scale, image.height // scale), Image.NEAREST)
     width, height = image.size
     # Sample every 2nd pixel: the canvas is large and the cubes are big enough.
     pixels = [image.getpixel((x, y)) for y in range(0, height, 2) for x in range(0, width, 2)]
@@ -163,6 +177,56 @@ def main():
 
             errors = [line for line in console if line.startswith(("error", "pageerror"))]
             check(not errors, f"no console errors ({errors[:3]})")
+
+            print("device")
+            # Phone-shaped metrics: a 3x device pixel ratio and a rotated layout.
+            phone = browser.new_context(
+                viewport=VIEWPORT,
+                device_scale_factor=3,
+                is_mobile=True,
+                has_touch=True,
+                user_agent=PHONE_USER_AGENT,
+            )
+            phone_page = phone.new_page()
+            phone_console = []
+            phone_page.on("console", lambda msg: phone_console.append(f"{msg.type}: {msg.text}"))
+            phone_page.on("pageerror", lambda err: phone_console.append(f"pageerror: {err}"))
+            phone_page.goto(f"{base}?renderer=webgl2", wait_until="domcontentloaded")
+            phone_page.wait_for_function(
+                "() => document.documentElement.dataset.bevyRunning === 'true'"
+                " || document.documentElement.dataset.renderError",
+                timeout=STARTUP_TIMEOUT_MS,
+            )
+            ratio = phone_page.evaluate("() => window.devicePixelRatio")
+            check(ratio == 3, f"the page runs at a 3x device pixel ratio (got {ratio})")
+            phone_page.wait_for_timeout(4000)
+            portrait = phone_page.locator("#game").bounding_box()
+            check(bool(portrait)
+                  and abs(portrait["width"] - VIEWPORT["width"]) <= 1
+                  and abs(portrait["height"] - VIEWPORT["height"]) <= 1,
+                  f"the canvas fills the portrait viewport ({portrait})")
+            portrait_pixels = analyse(phone_page.locator("#game").screenshot())
+            check(portrait_pixels["distinct"] > 16,
+                  f"the scene renders at 3x (distinct={portrait_pixels['distinct']})")
+            check(portrait_pixels["teal"] > 0.10,
+                  f"teal cubes cover the portrait viewport (share={portrait_pixels['teal']:.3f})")
+
+            # Rotation: the canvas must follow the new viewport without breaking.
+            phone_page.set_viewport_size(LANDSCAPE)
+            phone_page.wait_for_timeout(2500)
+            landscape = phone_page.locator("#game").bounding_box()
+            check(bool(landscape)
+                  and abs(landscape["width"] - LANDSCAPE["width"]) <= 1
+                  and abs(landscape["height"] - LANDSCAPE["height"]) <= 1,
+                  f"the canvas follows a rotated viewport ({landscape})")
+            landscape_pixels = analyse(phone_page.locator("#game").screenshot())
+            check(landscape_pixels["distinct"] > 16,
+                  f"the scene still renders after rotation (distinct={landscape_pixels['distinct']})")
+            check(landscape_pixels["dark"] > 0.02,
+                  f"the rotated frame is not a blank clear (dark share={landscape_pixels['dark']:.3f})")
+            phone_errors = [line for line in phone_console if line.startswith(("error", "pageerror"))]
+            check(not phone_errors, f"no console errors on the phone profile ({phone_errors[:3]})")
+            phone.close()
 
             print("overrides")
             # An unknown override must fail visibly instead of loading a renderer.
