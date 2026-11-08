@@ -35,6 +35,7 @@ test("packages a site into a clean output directory", () => {
     "build-manifest.json",
     "index.html",
     "loader.js",
+    "session.js",
     "webgl2/collateral-game.js",
     "webgl2/collateral-game_bg.wasm",
     "webgl2/index.html",

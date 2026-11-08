@@ -31,7 +31,7 @@ run() {
   "$@"
 }
 
-run node tools/test-loader.js
+run node tools/test-session.js
 run node tools/test-budget.js
 run node --test tools/test-package.js tools/test-ci-workflow.js
 

@@ -19,7 +19,7 @@ For local static hosting, build with `/` instead. The build finishes by running 
 ## Tests
 
 ```sh
-node tools/test-loader.js   # watchdog, hidden-tab time, render error and fallback
+node tools/test-session.js  # renderer choice, hidden-tab time, render error and fallback
 node tools/test-budget.js   # first-load and wasm budget boundaries
 python3 tools/test-web.py   # rendered pixels and cold-load bytes in a real browser
 ```

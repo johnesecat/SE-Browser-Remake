@@ -14,7 +14,7 @@ mkdir -p dist
 for renderer in webgl2 webgpu; do
   trunk build --release --locked --features "$renderer" --dist "dist/$renderer" --public-url "$public_url$renderer/"
 done
-cp web/index.html web/loader.js dist/
+cp web/index.html web/loader.js web/session.js dist/
 touch dist/.nojekyll
 
 # Gate the M0 first-load transfer budget (Brotli) and report uncompressed sizes.

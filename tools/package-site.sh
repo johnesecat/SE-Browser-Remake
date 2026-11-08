@@ -15,7 +15,7 @@ out=${2:-_site}
   echo "package-site: $dist/build-manifest.json is missing; run tools/build-web.sh first" >&2
   exit 1
 }
-for required in index.html loader.js; do
+for required in index.html loader.js session.js; do
   [ -f "$dist/$required" ] || { echo "package-site: $dist/$required is missing" >&2; exit 1; }
 done
 
@@ -32,6 +32,7 @@ copy() {
 
 copy index.html
 copy loader.js
+copy session.js
 copy build-manifest.json
 
 # Renderer entry points and the artifacts the loader injects for each backend.

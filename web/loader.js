@@ -1,29 +1,24 @@
+// DOM adapter for the renderer session: fetches, imports and reports.
+// The decisions about which artifact to start and when to give up live in
+// ./session.js so they can be tested without a browser.
+import { createSession } from './session.js';
+
+const root = document.documentElement;
 const status = document.querySelector('#status');
 const progress = document.querySelector('#progress');
 const loading = document.querySelector('#loading');
 const retry = document.querySelector('#retry');
 const diag = document.querySelector('#diag');
+const canvas = document.querySelector('#game');
 const params = new URLSearchParams(location.search);
+
 retry.addEventListener('click', () => location.reload());
 
-let renderer;
-let failed = false;
+// The session reports its own failures; this only covers errors it never saw.
+let handled = false;
 
-function handleFailure(error) {
-  if (failed) return;
-  failed = true;
-  if (renderer === 'webgpu' && !params.has('renderer') && params.get('_fallback') !== 'webgl2') {
-    console.error('WebGPU failed; retrying with WebGL2:', error);
-    status.textContent = 'WebGPU failed; retrying with WebGL2…';
-    const url = new URL(location.href);
-    url.searchParams.set('_fallback', 'webgl2');
-    location.replace(url.href);
-    return;
-  }
-  fail(error);
-}
-
-function fail(error) {
+function showFailure(error) {
+  handled = true;
   console.error('Platform spike failed:', error);
   loading.hidden = false;
   status.textContent = `Unable to start: ${error.message || error}`;
@@ -67,71 +62,70 @@ async function loadWasm(url) {
   return data;
 }
 
-async function waitForBevy(initialization, timeoutMs = 30000) {
-  let initialized = false;
-  let initializationFailed = false;
-  let initializationError;
-  Promise.resolve(initialization).then(
-    () => { initialized = true; },
-    error => { initializationFailed = true; initializationError = error; },
-  );
-  let visibleWait = 0;
-  let lastCheck = performance.now();
-  let wasVisible = document.visibilityState === 'visible';
-  function updateVisibility() {
-    const now = performance.now();
-    if (wasVisible) visibleWait += now - lastCheck;
-    lastCheck = now;
-    wasVisible = document.visibilityState === 'visible';
-  }
-  document.addEventListener('visibilitychange', updateVisibility);
-  try {
-    while (!initialized || document.documentElement.dataset.bevyRunning !== 'true') {
-      if (failed) return false;
-      if (initializationFailed) throw initializationError;
-      updateVisibility();
-      if (visibleWait > timeoutMs) throw new Error('Bevy did not begin updating within 30 visible seconds');
-      await new Promise(resolve => setTimeout(resolve, 100));
+const session = createSession({
+  probe: probeWebGPU,
+  startRenderer: async (renderer) => {
+    const manifest = await fetch('build-manifest.json', { cache: 'no-cache' });
+    if (!manifest.ok) throw new Error(`Build manifest returned HTTP ${manifest.status}`);
+    const artifacts = (await manifest.json())[renderer];
+    const module = await import(new URL(artifacts.js, document.baseURI));
+    const wasm = await loadWasm(new URL(artifacts.wasm, document.baseURI));
+    status.textContent = 'Starting Bevy…';
+    // The watchdog covers wasm initialization as well as the Bevy update loop.
+    return module.default({ module_or_path: wasm });
+  },
+  isRunning: () => root.dataset.bevyRunning === 'true',
+  navigate: (url) => location.replace(url),
+  fallbackUrl: () => {
+    const url = new URL(location.href);
+    url.searchParams.set('_fallback', 'webgl2');
+    return url.href;
+  },
+  now: () => performance.now(),
+  visibility: () => document.visibilityState === 'visible',
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  onEvent: (event) => {
+    switch (event.type) {
+      case 'selected':
+        console.info(`Selected renderer artifact: ${event.renderer}`);
+        root.dataset.renderer = event.renderer.toUpperCase();
+        root.dataset.diagnostics = String(params.get('diag') === '1');
+        diag.hidden = params.get('diag') !== '1';
+        break;
+      case 'loading':
+        status.textContent = `Loading ${event.renderer.toUpperCase()} renderer…`;
+        break;
+      case 'fallback':
+        handled = true;
+        console.error('WebGPU failed; retrying with WebGL2:', event.error);
+        status.textContent = 'WebGPU failed; retrying with WebGL2…';
+        break;
+      case 'probe-error':
+        console.warn('WebGPU probe failed:', event.error);
+        break;
+      case 'running':
+        loading.hidden = true;
+        break;
+      case 'failed':
+        showFailure(event.error);
+        break;
+      default:
+        break;
     }
-    return !failed;
-  } finally {
-    document.removeEventListener('visibilitychange', updateVisibility);
-  }
-}
-
-async function start() {
-  const override = params.get('renderer');
-  if (override !== null && !['webgpu', 'webgl2'].includes(override)) throw new Error('Unknown renderer override');
-  let gpu = false;
-  if (override !== 'webgl2' && (override === 'webgpu' || params.get('_fallback') !== 'webgl2')) {
-    try { gpu = await probeWebGPU(); } catch (error) { console.warn('WebGPU probe failed:', error); }
-  }
-  if (override === 'webgpu' && !gpu) throw new Error('WebGPU was requested but the adapter smoke test failed');
-  renderer = gpu ? 'webgpu' : 'webgl2';
-  console.info(`Selected renderer artifact: ${renderer}`);
-  document.documentElement.dataset.renderer = renderer.toUpperCase();
-  document.documentElement.dataset.diagnostics = String(params.get('diag') === '1');
-  diag.hidden = params.get('diag') !== '1';
-  status.textContent = `Loading ${renderer.toUpperCase()} renderer…`;
-  const manifest = await fetch('build-manifest.json', { cache: 'no-cache' });
-  if (!manifest.ok) throw new Error(`Build manifest returned HTTP ${manifest.status}`);
-  const artifacts = (await manifest.json())[renderer];
-  const module = await import(new URL(artifacts.js, document.baseURI));
-  const wasm = await loadWasm(new URL(artifacts.wasm, document.baseURI));
-  status.textContent = 'Starting Bevy…';
-  // The watchdog covers wasm initialization as well as the Bevy update loop.
-  // A progressing app loop is not proof of a successful visible frame.
-  if (await waitForBevy(module.default({ module_or_path: wasm }))) loading.hidden = true;
-}
-
-const root = document.documentElement;
-new MutationObserver(() => {
-  if (root.dataset.renderError) handleFailure(new Error(`Renderer failed: ${root.dataset.renderError}`));
-}).observe(root, { attributes: true, attributeFilter: ['data-render-error'] });
-document.querySelector('#game').addEventListener('webglcontextlost', () => {
-  handleFailure(new Error('WebGL context lost; reload to retry'));
+  },
 });
-start().catch(handleFailure);
+
+// A renderer that reports a fatal error after startup takes the same path.
+new MutationObserver(() => {
+  if (root.dataset.renderError) session.fail(new Error(`Renderer failed: ${root.dataset.renderError}`));
+}).observe(root, { attributes: true, attributeFilter: ['data-render-error'] });
+canvas.addEventListener('webglcontextlost', () => {
+  session.fail(new Error('WebGL context lost; reload to retry'));
+});
+
+session
+  .start({ override: params.get('renderer'), fallback: params.get('_fallback') })
+  .catch((error) => { if (!handled) showFailure(error); });
 
 let resizeTimer;
 function resizeViewport() {
